@@ -1,0 +1,28 @@
+# gateway_config.yaml
+# Runtime configuration for the SDV Gateway.
+# All services read this file at startup.
+
+can:
+  interface: can0
+  bitrate: 500000          # 500 kbps baseline (SYSTEM_SPECIFICATION.md)
+  fd_enabled: false        # CAN FD — future ADR item
+
+bridge:
+  tcp_port: 5000
+  tcp_host: "0.0.0.0"      # Listen on all interfaces
+  max_clients: 1            # Single client in Phase 3
+
+diagnostics:
+  enabled: true
+  uds_request_id:  0x7DF
+  uds_response_base_id: 0x7E8
+  session_timeout_ms: 5000
+
+logging:
+  enabled: true
+  output_dir: "logs/"
+  format: csv               # csv | asc
+  flush_interval_ms: 100
+
+ota:
+  enabled: false            # OTA is Phase 4
