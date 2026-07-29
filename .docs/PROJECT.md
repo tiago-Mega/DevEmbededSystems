@@ -6,9 +6,11 @@
 
 **Degree:** MSc Electrical and Computer Engineering
 
-**Status:** Planning
+**Status:** Phase 2 — Hardware Selection & CAN Bring-Up
 
-**Version:** 0.1
+**Version:** 0.2
+
+**Last Updated:** 2026-07-29
 
 ---
 
@@ -33,21 +35,17 @@ The system should be modular and expandable throughout the duration of the maste
 
 # Long-Term Objectives
 
-Develop practical experience with
+Develop practical experience with:
 
-- Embedded C
-- Modern C++
-- STM32
-- ARM Cortex-M
+- Embedded C17
+- Modern C++17
+- STM32 (ARM Cortex-M)
 - FreeRTOS
-- Raspberry Pi
-- Linux
-- CAN
-- CAN FD
+- Raspberry Pi 5 (Linux)
+- CAN / CAN FD
 - Automotive Ethernet
 - TCP/IP
-- UDS
-- ISO-TP
+- UDS / ISO-TP
 - SocketCAN
 - AUTOSAR concepts
 - Embedded debugging
@@ -61,187 +59,109 @@ Investigate modern Software Defined Vehicle architectures.
 
 Possible research topics include:
 
-- Gateway latency
-- CAN versus Ethernet communication
-- Centralized computing
-- ECU scalability
-- Network utilization
-- Fault tolerance
-- Modular software architectures
+- Gateway forwarding latency (CAN → Ethernet)
+- CAN versus CAN FD throughput comparison
+- Centralized vs distributed computing tradeoffs
+- ECU scalability under increasing bus load
+- Network utilisation benchmarking
+- Fault tolerance and recovery behaviour
+- Modular AUTOSAR-inspired software architectures
 
-These research questions may evolve during the project.
+These research questions will be narrowed to a primary thesis question in Phase 6.
 
 ---
 
 # Current System Architecture
 
-Laptop
-
-↓
-
-Diagnostics GUI
-
-↓
-
-Ethernet
-
-↓
-
-Raspberry Pi
-
-↓
-
-CAN Gateway
-
-↓
-
-CAN Network
-
-↓
-
-STM32 ECUs
+```
+Laptop (Diagnostics / Tooling)
+          |
+       Ethernet (TCP)
+          |
+    Raspberry Pi 5 (Gateway)
+     /        |        \
+  bridge    diag     logger
+          |
+       SocketCAN (can0)
+          |
+       CAN Bus (500 kbps)
+       /   |   |   \
+     BCM  CLU HVAC BAT
+     STM32 ECUs
+```
 
 ---
 
 # Planned ECUs
 
-## Body Control Module
+## Body Control Module (BCM)
 
-Responsibilities
-
-- Doors
-- Windows
-- Interior Lighting
-- Hazard Lights
-
----
+- Doors, Windows, Interior Lighting, Hazard Lights
+- CAN TX: 0x100–0x103
 
 ## Instrument Cluster
 
-Responsibilities
-
-- Dashboard Display
-- Warning Indicators
-- Vehicle Status
-
----
+- Dashboard Display, Warning Indicators, Vehicle Status
+- CAN TX: 0x200–0x202
 
 ## HVAC ECU
 
-Responsibilities
-
-- Cabin Temperature
-- Fan Speed
-- Climate Simulation
-
----
+- Cabin Temperature, Fan Speed, Climate Simulation
+- CAN TX: 0x300–0x301 | RX: 0x302
 
 ## Battery ECU
 
-Responsibilities
-
-- Voltage
-- Current
-- Temperature
-- State of Charge
-
----
+- Voltage, Current, Temperature, State of Charge
+- CAN TX: 0x400–0x403
 
 ## Future ECUs
 
-Potential additions
-
-- ABS
-- Steering
-- Infotainment
-- ADAS
-- Engine Simulator
+- ABS, Steering, Infotainment, ADAS, Engine Simulator
 
 ---
 
 # Networking
 
-Primary vehicle network
-
-CAN
-
-Future support
-
-- CAN FD
-- Automotive Ethernet
-- SOME/IP
-
-Diagnostics
-
-- UDS
-- ISO-TP
-
-Gateway
-
-CAN ↔ Ethernet
+- **Primary:** CAN 2.0B at 500 kbps (ADR-003)
+- **Future:** CAN FD, Automotive Ethernet, SOME/IP
+- **Diagnostics:** UDS over ISO-TP (Phase 4)
+- **Gateway:** CAN ↔ Ethernet bridge (Phase 4)
 
 ---
 
 # Embedded Software
 
-Microcontrollers
+- **MCU:** STM32 Nucleo (ADR-001) — F446RE or G474RE (OI-001)
+- **Language:** C17
+- **RTOS:** FreeRTOS (ADR-002)
+- **Transceiver:** SN65HVD230 at 3.3 V (ADR-005)
 
-STM32
+**Architecture layers:**
 
-Language
-
-C17
-
-Operating System
-
-FreeRTOS
-
-Architecture
-
+```
 Application
-
-↓
-
+     ↓
 Services
-
-↓
-
-Communication
-
-↓
-
+     ↓
+Communication   ← can_driver.h
+     ↓
 Drivers
-
-↓
-
-HAL
+     ↓
+HAL             ← STM32CubeIDE / CubeMX generated
+```
 
 ---
 
-# Raspberry Pi
+# Raspberry Pi Gateway
 
-Operating System
-
-Linux
-
-Languages
-
-- Python
-- C++
-
-Responsibilities
-
-- Gateway
-- Diagnostics
-- OTA
-- Logging
-- Visualization
+- **Platform:** Raspberry Pi 5 (ADR-004)
+- **OS:** Raspberry Pi OS (Linux)
+- **Languages:** C++17 (bridge), Python 3 (diagnostics, logging)
+- **CAN interface:** MCP2515-based HAT (Waveshare 2-CH CAN HAT or equivalent)
 
 ---
 
 # Design Principles
-
-The project should prioritize
 
 - Modularity
 - Simplicity
@@ -254,43 +174,43 @@ The project should prioritize
 
 # Coding Standards
 
-Embedded
+**Embedded (C17):**
 
-- Prefer static allocation
-- Avoid recursion
-- Avoid dynamic allocation
-- Keep ISRs short
-- Separate hardware abstraction
+- Static allocation only
+- No recursion
+- No dynamic allocation after init
+- ISRs ≤ 10 µs execution time
+- Separate hardware abstraction (HAL never called above Driver layer)
 
-Linux
+**Gateway (C++17 / Python 3):**
 
-- Modular applications
-- Modern C++ where appropriate
-- Python for tooling
+- C++17 for performance-critical bridge (RAII, no raw owning pointers)
+- Python 3 for tooling and diagnostics
+- Modular service design
 
 ---
 
 # Testing Strategy
 
-Every subsystem should include
+Every subsystem must include:
 
-- Unit testing
-- Integration testing
-- Latency testing
-- Stress testing
+- Unit testing (Unity for C, pytest for Python)
+- Integration testing (ECU ↔ Gateway)
+- Latency benchmarking
+- Stress testing (`cangen` bus load)
 - Fault injection
-- Recovery testing
+- 24-hour stability testing
 
 ---
 
 # Documentation
 
-Every module should include
+Every module must include Doxygen-compatible header with:
 
 - Purpose
 - Interfaces
 - Dependencies
-- Communication
+- Communication (CAN IDs if applicable)
 - Configuration
 - Limitations
 - Future Improvements
@@ -299,121 +219,112 @@ Every module should include
 
 # Milestones
 
-## Phase 1
+## Phase 1 — Research & Architecture ✅
 
-Research
+- Literature review
+- Architecture proposal
+- Hardware comparison
+- ADR-001 to ADR-004 accepted
 
-Architecture
-
-Hardware selection
-
----
-
-## Phase 2
-
-CAN communication
-
-STM32 firmware
-
-Basic ECU implementation
+**Deliverable:** Architecture proposal + documented ADRs
 
 ---
 
-## Phase 3
+## Phase 2 — Hardware & CAN Bring-Up 🔄 (Current)
 
-Gateway
+- Purchase STM32 Nucleo boards and SN65HVD230 transceivers
+- Purchase Raspberry Pi 5 + CAN HAT
+- Bring up physical CAN bus
+- Verify BCM ECU transmits CAN frames (candump)
+- Complete `can_driver.c` implementation
 
-Linux
-
-Ethernet
-
-Diagnostics
-
----
-
-## Phase 4
-
-OTA
-
-System integration
-
-Performance optimization
+**Done when:** BCM transmits 0x100 frame at 10 ms cycle, verified with `candump can0`
 
 ---
 
-## Phase 5
+## Phase 3 — Full ECU Firmware
 
-Evaluation
+- Implement Cluster, HVAC, Battery ECU app tasks
+- Multi-ECU CAN bus verified
+- FreeRTOS task timing verified
 
-Benchmarking
-
-Research experiments
+**Done when:** All 4 ECUs transmit on bus simultaneously, no frame loss at nominal load
 
 ---
 
-## Phase 6
+## Phase 4 — Gateway & Diagnostics
 
-Thesis writing
+- SocketCAN + CAN HAT bring-up on RPi 5
+- `can_eth_bridge` compiled and tested
+- `can_logger.py` captures timestamped frames
+- UDS TesterPresent (0x3E) verified end-to-end
 
-Presentation
+**Done when:** Laptop receives CAN frames over TCP, logger writes CSV, UDS session opens
 
-Final validation
+---
+
+## Phase 5 — OTA & Integration
+
+- OTA bootloader architecture (ADR-007)
+- System integration test
+- Performance optimisation
+- Security hardening
+
+**Done when:** Firmware update delivered to one ECU over CAN from RPi
+
+---
+
+## Phase 6 — Evaluation & Thesis
+
+- Benchmarking experiments
+- Data collection and analysis
+- Thesis writing
+- Final validation
+
+**Done when:** Thesis submitted
 
 ---
 
 # Stretch Goals
 
 - AUTOSAR-like RTE
-- CAN FD
+- CAN FD migration
 - SOME/IP
 - Automotive Ethernet
 - Secure Boot
 - Intrusion Detection System
-- TinyML
+- TinyML on RPi
 - Qt Dashboard
 
 ---
 
 # Repository Structure
 
-/docs
-
-/firmware
-
-/gateway
-
-/tests
-
-/hardware
-
-/scripts
-
-/tools
-
-/thesis
+```
+.docs/       ← Project documentation and ADRs
+firmware/    ← STM32 ECU firmware (C17 + FreeRTOS)
+gateway/     ← Raspberry Pi gateway (C++17 + Python)
+tests/       ← System-level tests
+hardware/    ← Schematics, BOM, transceiver datasheets
+scripts/     ← Build automation, flash scripts, benchmarking
+tools/       ← DBC files, diagnostics tooling
+thesis/      ← Research writing and experiments
+```
 
 ---
 
 # Current Sprint
 
-(To be updated weekly.)
+**Sprint Goal:** Complete firmware scaffold and begin hardware procurement.
 
-Current focus:
+**Current Focus:**
+- ✅ `/firmware` scaffolded (BCM fully stubbed, shared drivers defined)
+- ✅ `/gateway` scaffolded (C++ bridge, Python diagnostics/logger)
+- ✅ ADR-005 (SN65HVD230), ADR-006 (language split), ADR-007 (OTA proposed)
+- ⬜ Implement `can_driver.c` (STM32 HAL CAN implementation)
+- ⬜ Implement `tcp_server.cpp` (gateway TCP implementation)
+- ⬜ Procure hardware: STM32 Nucleo + SN65HVD230 + RPi 5 CAN HAT
 
-- None
+**Next Milestone:** BCM transmits 0x100 frame verified with `candump`
 
-Next milestone:
-
-- Finalize hardware selection
-
-Current blockers:
-
-- None
-
----
-
-# Notes
-
-This document is intended to evolve throughout the project.
-
-It should always represent the current state of the system.
+**Current Blockers:** Hardware not yet procured
